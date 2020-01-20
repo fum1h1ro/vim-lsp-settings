@@ -4,6 +4,9 @@ function! lsp_settings#get(name, key, default) abort
   let l:config = get(g:, 'lsp_settings', {})
   if !has_key(l:config, a:name)
     if !has_key(l:config, '*')
+      if type(a:default) ==# v:t_func
+        return a:default(a:name, a:key)
+      endif
       return a:default
     endif
     let l:config = l:config['*']
@@ -11,6 +14,9 @@ function! lsp_settings#get(name, key, default) abort
     let l:config = l:config[a:name]
   endif
   if !has_key(l:config, a:key)
+    if type(a:default) ==# v:t_func
+      return a:default(a:name, a:key)
+    endif
     return a:default
   endif
   return l:config[a:key]
@@ -24,30 +30,31 @@ function! s:first_one(cmd) abort
 endfunction
 
 function! lsp_settings#exec_path(cmd) abort
-  let l:s = split(a:cmd, ':')
-  let l:dir = len(l:s) >= 1 ? l:s[0] : ''
-  let l:cmd = len(l:s) >= 2 ? l:s[1] : l:s[0]
-
-  let l:paths = split($PATH, has('win32') ? ';' : ':')
+  let l:paths = []
+  if has('win32')
+    for l:path in split($PATH, ';')
+      if l:path[len(l:path) - 1:] == "\\"
+        call add(l:paths, l:path[:len(l:path)-2])
+      elseif !empty(l:path)
+        call add(l:paths, l:path)
+      endif
+    endfor
+  else
+    let l:paths = split($PATH, ':')
+  endif
   let l:paths = join(l:paths, ',')
-  let l:path = globpath(l:paths, l:cmd)
+  let l:path = globpath(l:paths, a:cmd)
   if !has('win32')
     if !empty(l:path)
       return s:first_one(l:path)
     endif
   else
-    let l:path = globpath(l:paths, l:cmd . '.exe')
-    if !empty(l:path)
-      return s:first_one(l:path)
-    endif
-    let l:path = globpath(l:paths, l:cmd . '.cmd')
-    if !empty(l:path)
-      return s:first_one(l:path)
-    endif
-    let l:path = globpath(l:paths, l:cmd . '.bat')
-    if !empty(l:path)
-      return s:first_one(l:path)
-    endif
+    for l:ext in ['.exe', '.cmd', '.bat']
+      let l:path = globpath(l:paths, a:cmd . l:ext)
+      if !empty(l:path)
+        return s:first_one(l:path)
+      endif
+    endfor
   endif
 
   let l:paths = get(g:, 'lsp_settings_extra_paths', '')
@@ -55,22 +62,16 @@ function! lsp_settings#exec_path(cmd) abort
     let l:paths = join(l:paths, ',') . ','
   endif
   let l:servers_dir = get(g:, 'lsp_settings_servers_dir', s:servers_dir)
-  let l:paths .= l:servers_dir . '/' . l:dir
+  let l:paths .= l:servers_dir . '/' . a:cmd
   if !has('win32')
-    return s:first_one(globpath(l:paths, l:cmd))
+    return s:first_one(globpath(l:paths, a:cmd))
   endif
-  let l:path = globpath(l:paths, l:cmd . '.exe')
-  if !empty(l:path)
-    return s:first_one(l:path)
-  endif
-  let l:path = globpath(l:paths, l:cmd . '.cmd')
-  if !empty(l:path)
-    return s:first_one(l:path)
-  endif
-  let l:path = globpath(l:paths, l:cmd . '.bat')
-  if !empty(l:path)
-    return s:first_one(l:path)
-  endif
+  for l:ext in ['.exe', '.cmd', '.bat']
+    let l:path = globpath(l:paths, a:cmd . l:ext)
+    if !empty(l:path)
+      return s:first_one(l:path)
+    endif
+  endfor
   return ''
 endfunction
 
@@ -80,4 +81,19 @@ function! lsp_settings#root_uri(pattern) abort
     return lsp#utils#get_default_root_uri()
   endif
   return lsp#utils#path_to_uri(l:dir)
+endfunction
+
+function! lsp_settings#autocd(server_info) abort
+  if !has_key(a:server_info, 'root_uri')
+    return
+  endif
+  if type(a:server_info['root_uri']) ==# v:t_func
+    let l:root_uri = a:server_info['root_uri'](a:server_info)
+  else
+    let l:root_uri = a:server_info['root_uri']
+  endif
+  let l:path = lsp#utils#uri_to_path(l:root_uri)
+  if isdirectory(l:path)
+    exe 'cd' l:path
+  endif
 endfunction

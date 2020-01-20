@@ -1,4 +1,4 @@
-if exists('g:loaded_lsp_settings')
+if exists('g:loaded_lsp_settings') || !exists('*json_encode') || !has('lambda')
   finish
 endif
 let g:loaded_lsp_settings= 1
@@ -21,15 +21,11 @@ function! s:executable(cmd) abort
   if !has('win32')
     return !empty(globpath(l:paths, a:cmd))
   endif
-  if !empty(globpath(l:paths, a:cmd . '.exe'))
-    return 1
-  endif
-  if !empty(globpath(l:paths, a:cmd . '.cmd'))
-    return 1
-  endif
-  if !empty(globpath(l:paths, a:cmd . '.bat'))
-    return 1
-  endif
+  for l:ext in ['.exe', '.cmd', '.bat']
+    if !empty(globpath(l:paths, a:cmd . l:ext))
+      return 1
+    endif
+  endfor
   return 0
 endfunction
 
@@ -99,6 +95,9 @@ endfunction
 
 function! s:vimlsp_install_server() abort
   let l:entry = s:vimlsp_installer()
+  if empty(l:entry)
+    return
+  endif
   let l:servers_dir = get(g:, 'lsp_settings_servers_dir', s:servers_dir)
   let l:server_install_dir = l:servers_dir . '/' . l:entry[0]
   if isdirectory(l:server_install_dir)
