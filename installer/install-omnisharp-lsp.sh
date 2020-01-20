@@ -17,8 +17,8 @@ darwin)
   ;;
 esac
 
-version="v1.34.9"
-url="https://github.com/OmniSharp/omnisharp-roslyn/releases/download/$version/omnisharp-$os$arch.tar.gz"
+version=`curl https://roslynomnisharp.blob.core.windows.net/releases/versioninfo.txt`
+url="https://roslynomnisharp.blob.core.windows.net/releases/$version/omnisharp-$os$arch.tar.gz"
 curl -LO "$url"
 tar xzvf omnisharp-$os$arch.tar.gz
 rm omnisharp-$os$arch.tar.gz
